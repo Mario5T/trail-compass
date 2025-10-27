@@ -2,6 +2,8 @@ import React, { useEffect, useState } from "react";
 import { View, StyleSheet, Share } from "react-native";
 import { Card, List, IconButton, Text, Snackbar } from "react-native-paper";
 import { loadPins, savePins } from "../storage";
+import { fmt, toCardinal } from "../utils/geo";
+
 
 export default function PinsScreen() {
   const [pins, setPins] = useState([]);
@@ -9,16 +11,37 @@ export default function PinsScreen() {
 
   useEffect(() => {
     // TODO(5): Load saved pins into state on mount
+    let mounted = true;
+    const loadSavedPins = async () => {
+      const saved = await loadPins();
+      if (mounted) setPins(saved);
+    };
+    loadSavedPins();
+
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   const remove = async (id) => {
     // TODO(6): Delete pin by id and persist via savePins(next)
-    setSnack("TODO: delete pin");
+    const nextPins = pins.filter(pin => pin.id !== id);
+    setPins(nextPins);
+    await savePins(nextPins);
+    setSnack("Pin deleted");
   };
 
   const sharePin = async (p) => {
     // TODO(7): Share pin location nicely (include timestamp if you like)
-    setSnack("TODO: share pin");
+    try {
+      const cardinal = toCardinal(p.heading);
+      const date = new Date(p.ts).toLocaleString();
+      const message = `📍 Location Pin\n${fmt(p.lat)}, ${fmt(p.lon)}\nDirection: ${cardinal} ${Math.round(p.heading)}°\nSaved: ${date}`;
+      await Share.share({ message });
+      setSnack("Pin shared");
+    } catch (error) {
+      setSnack("Failed to share pin");
+    }
   };
 
   return (
@@ -33,8 +56,8 @@ export default function PinsScreen() {
               {pins.map((p) => (
                 <List.Item
                   key={p.id}
-                  title={`${p.lat.toFixed(6)}, ${p.lon.toFixed(6)}`}
-                  description={new Date(p.ts).toLocaleString()}
+                  title={`${fmt(p.lat)}, ${fmt(p.lon)}`}
+                  description={`${new Date(p.ts).toLocaleString()} • ${toCardinal(p.heading)} ${Math.round(p.heading)}°`}
                   left={(props) => <List.Icon {...props} icon="map-marker" />}
                   right={() => (
                     <View
